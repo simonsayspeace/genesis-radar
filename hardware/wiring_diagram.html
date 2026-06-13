@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UWB Radar Wiring Diagram</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#0a0a0f;
+    color:#ccd;
+    font-family:'Share Tech Mono',monospace;
+    min-height:100vh;
+    padding:16px;
+  }
+  h1 {
+    font-family:'Orbitron',sans-serif;
+    font-size:13px;
+    letter-spacing:4px;
+    color:#4af;
+    text-align:center;
+    margin-bottom:14px;
+    text-transform:uppercase;
+  }
+  #diagram {
+    position:relative;
+    width:100%;
+    max-width:900px;
+    margin:0 auto;
+  }
+  canvas {
+    display:block;
+    width:100%;
+    border:1px solid #1a2a4a;
+    border-radius:6px;
+    background:#060610;
+    cursor:pointer;
+  }
+  #legend {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:12px auto;
+    max-width:900px;
+    justify-content:center;
+  }
+  .leg {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:10px;
+    color:#889;
+  }
+  .leg-line {
+    width:28px;
+    height:3px;
+    border-radius:2px;
+  }
+  #info {
+    max-width:900px;
+    margin:10px auto 0;
+    background:#080818;
+    border:1px solid #1a2a4a;
+    border-radius:6px;
+    padding:12px 16px;
+    font-size:10px;
+    color:#7a9abc;
+    min-height:60px;
+    line-height:1.7;
+  }
+  #info h3 {
+    font-family:'Orbitron',sans-serif;
+    font-size:10px;
+    color:#4af;
+    margin-bottom:6px;
+    letter-spacing:2px;
+  }
+  #pintable {
+    max-width:900px;
+    margin:12px auto 0;
+    border-collapse:collapse;
+    width:100%;
+    font-size:10px;
+  }
+  #pintable th {
+    background:#0d1a2a;
+    color:#4af;
+    padding:6px 10px;
+    text-align:left;
+    border:1px solid #1a2a4a;
+    font-family:'Orbitron',sans-serif;
+    font-size:9px;
+    letter-spacing:1px;
+  }
+  #pintable td {
+    padding:5px 10px;
+    border:1px solid #1a2a4a;
+    color:#8ab;
+  }
+  #pintable tr:nth-child(even) td { background:#080814; }
+  #pintable tr:hover td { background:#0d1a2a; color:#4af; }
+  .note {
+    max-width:900px;
+    margin:12px auto 0;
+    background:#0d1200;
+    border:1px solid #2a4a1a;
+    border-radius:6px;
+    padding:10px 14px;
+    font-size:10px;
+    color:#6a9;
+    line-height:1.7;
+  }
+  .note strong { color:#8fa; }
+</style>
+</head>
+<body>
+<h1>◈ UWB Through-Wall Radar — Wiring Diagram ◈</h1>
+
+<div id="diagram">
+  <canvas id="wiring" width="900" height="580"></canvas>
+</div>
+
+<div id="legend">
+  <div class="leg"><div class="leg-line" style="background:#ff4444"></div> 3.3V Power</div>
+  <div class="leg"><div class="leg-line" style="background:#444"></div> GND</div>
+  <div class="leg"><div class="leg-line" style="background:#4af"></div> SPI MOSI</div>
+  <div class="leg"><div class="leg-line" style="background:#f4a"></div> SPI MISO</div>
+  <div class="leg"><div class="leg-line" style="background:#ff0"></div> SPI CLK</div>
+  <div class="leg"><div class="leg-line" style="background:#0f8"></div> CS Select</div>
+  <div class="leg"><div class="leg-line" style="background:#f80"></div> IRQ</div>
+</div>
+
+<div id="info">
+  <h3>CLICK ANY COMPONENT FOR DETAILS</h3>
+  Hover or tap a component to see pin details, notes, and wiring instructions.
+</div>
+
+<table id="pintable">
+  <tr>
+    <th>ESP32-S3 GPIO</th>
+    <th>Connected To</th>
+    <th>Signal</th>
+    <th>Notes</th>
+  </tr>
+  <tr><td>GPIO 11</td><td>All DW3000 + 74HC138 pin 1</td><td>SPI CLK</td><td>Shared clock all modules</td></tr>
+  <tr><td>GPIO 13</td><td>All DW3000 MOSI</td><td>SPI MOSI</td><td>Shared data out</td></tr>
+  <tr><td>GPIO 12</td><td>All DW3000 MISO</td><td>SPI MISO</td><td>Shared data in — tri-state when CS high</td></tr>
+  <tr><td>GPIO 4</td><td>74HC138 pin A0</td><td>CS Select bit 0</td><td>Selects which module is active</td></tr>
+  <tr><td>GPIO 5</td><td>74HC138 pin A1</td><td>CS Select bit 1</td><td>3 pins select 1 of 8 outputs</td></tr>
+  <tr><td>GPIO 6</td><td>74HC138 pin A2</td><td>CS Select bit 2</td><td>Only 5 of 8 outputs used</td></tr>
+  <tr><td>GPIO 7</td><td>DW3000 Tx IRQ</td><td>Interrupt Tx</td><td>Fires when Tx pulse complete</td></tr>
+  <tr><td>GPIO 8</td><td>DW3000 Rx1 IRQ</td><td>Interrupt Rx1</td><td>Fires when frame received</td></tr>
+  <tr><td>GPIO 9</td><td>DW3000 Rx2 IRQ</td><td>Interrupt Rx2</td><td>Fires when frame received</td></tr>
+  <tr><td>GPIO 10</td><td>DW3000 Rx3 IRQ</td><td>Interrupt Rx3</td><td>Fires when frame received</td></tr>
+  <tr><td>GPIO 14</td><td>DW3000 Rx4 IRQ</td><td>Interrupt Rx4</td><td>Fires when frame received</td></tr>
+  <tr><td>3.3V</td><td>All VCC pins + 74HC138 VCC</td><td>Power</td><td>AMS1117 regulator per module recommended</td></tr>
+  <tr><td>GND</td><td>All GND pins</td><td>Ground</td><td>Star ground topology — all meet at one point</td></tr>
+</table>
+
+<div class="note">
+  <strong>⚠ Important Notes:</strong><br>
+  1. Place a <strong>100nF decoupling capacitor</strong> between VCC and GND on every DW3000 module — as close to the chip as possible.<br>
+  2. Keep SPI traces <strong>short and equal length</strong> — long unequal traces cause timing errors at high speed.<br>
+  3. The 74HC138 <strong>active low outputs</strong> match the DW3000 CS pin perfectly — no inverter needed.<br>
+  4. Use <strong>star ground</strong> — all GND wires meet at one central point to avoid ground loops.<br>
+  5. Mount Vivaldi antennas <strong>parallel and facing forward</strong> — not angled or crossed.
+</div>
+
+<script>
+const canvas = document.getElementById('wiring');
+const ctx = canvas.getContext('2d');
+const W = 900, H = 580;
+
+// ── Colour palette ────────────────────────────────────────────
+const COL = {
+  power:  '#ff4444',
+  gnd:    '#555566',
+  mosi:   '#44aaff',
+  miso:   '#ff44aa',
+  clk:    '#ffee00',
+  cs:     '#00ff88',
+  irq:    '#ff8800',
+  bg:     '#060610',
+  box:    '#0d1a2a',
+  border: '#1a3a6a',
+  text:   '#aabbcc',
+  label:  '#4aaeff',
+  hi:     '#ffffff',
+};
+
+// ── Component definitions ─────────────────────────────────────
+const components = {
+  esp32: {
+    x:20, y:160, w:160, h:260,
+    label:'ESP32-S3', sub:'JC3248W535C',
+    color:'#0d2a1a', border:'#1a6a3a',
+    pins: {
+      clk:  {x:180, y:210, label:'GPIO11 CLK'},
+      mosi: {x:180, y:230, label:'GPIO13 MOSI'},
+      miso: {x:180, y:250, label:'GPIO12 MISO'},
+      a0:   {x:180, y:280, label:'GPIO4 A0'},
+      a1:   {x:180, y:296, label:'GPIO5 A1'},
+      a2:   {x:180, y:312, label:'GPIO6 A2'},
+      irq0: {x:180, y:340, label:'GPIO7 IRQ-Tx'},
+      irq1: {x:180, y:356, label:'GPIO8 IRQ-Rx1'},
+      irq2: {x:180, y:372, label:'GPIO9 IRQ-Rx2'},
+      irq3: {x:180, y:388, label:'GPIO10 IRQ-Rx3'},
+      irq4: {x:180, y:404, label:'GPIO14 IRQ-Rx4'},
+      vcc:  {x:180, y:180, label:'3.3V'},
+      gnd:  {x:180, y:196, label:'GND'},
+    },
+    info: `ESP32-S3 — Master Controller\n\nRuns the full radar pipeline:\n• CIR data capture from all 5 DW3000s\n• Background subtraction algorithm\n• Multilateration calculation\n• LovyanGFX display rendering\n\nThe built-in 3.5" touchscreen displays\nthe tactical radar UI directly.`
+  },
+  mux: {
+    x:280, y:220, w:120, h:100,
+    label:'74HC138', sub:'3-to-8 Decoder',
+    color:'#1a1a0d', border:'#6a6a1a',
+    pins: {
+      a0:  {x:280, y:248, label:'A0'},
+      a1:  {x:280, y:264, label:'A1'},
+      a2:  {x:280, y:280, label:'A2'},
+      cs0: {x:400, y:232, label:'Y0→Tx'},
+      cs1: {x:400, y:248, label:'Y1→Rx1'},
+      cs2: {x:400, y:264, label:'Y2→Rx2'},
+      cs3: {x:400, y:280, label:'Y3→Rx3'},
+      cs4: {x:400, y:296, label:'Y4→Rx4'},
+      vcc: {x:280, y:232, label:'VCC'},
+      gnd: {x:280, y:310, label:'GND'},
+    },
+    info: `74HC138 — SPI Chip Select Decoder\n\nAllows 3 GPIO pins to select any\none of 8 SPI devices.\n\nOnly 3 pins needed to control\nall 5 DW3000 modules:\n• A0+A1+A2 = 000 → CS Tx active\n• A0+A1+A2 = 001 → CS Rx1 active\n• etc.\n\nOutputs are active LOW — perfect\nfor DW3000 CS pin polarity.\n\nCost: ~$1 AUD`
+  },
+};
+
+// DW3000 modules
+const dw3000s = [
+  {id:'Tx',  x:530, y:40,  color:'#1a0d1a', border:'#6a1a6a', role:'TRANSMITTER'},
+  {id:'Rx1', x:530, y:150, color:'#0d1a0d', border:'#1a6a1a', role:'RECEIVER LEFT'},
+  {id:'Rx2', x:530, y:260, color:'#0d1a0d', border:'#1a6a1a', role:'RECEIVER RIGHT'},
+  {id:'Rx3', x:530, y:370, color:'#0d1a0d', border:'#1a6a1a', role:'RECEIVER TOP'},
+  {id:'Rx4', x:530, y:480, color:'#0d1a0d', border:'#1a6a1a', role:'RECEIVER BOTTOM'},
+];
+
+// ── Wire routing ──────────────────────────────────────────────
+function drawWire(x1,y1,x2,y2,col,dash=false) {
+  ctx.beginPath();
+  if (dash) ctx.setLineDash([4,3]);
+  else ctx.setLineDash([]);
+  // Route with right-angle bends
+  const mx = (x1+x2)/2;
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(mx,y1);
+  ctx.lineTo(mx,y2);
+  ctx.lineTo(x2,y2);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawWireDirect(x1,y1,x2,y2,col) {
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.strokeStyle=col;
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+}
+
+// ── Draw a component box ──────────────────────────────────────
+function drawBox(x,y,w,h,label,sub,col,border,highlighted=false) {
+  ctx.fillStyle = highlighted ? '#1a2a3a' : col;
+  ctx.strokeStyle = highlighted ? '#4af' : border;
+  ctx.lineWidth = highlighted ? 2 : 1;
+  ctx.beginPath();
+  ctx.roundRect(x,y,w,h,4);
+  ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = highlighted ? '#4af' : COL.label;
+  ctx.font = 'bold 11px Share Tech Mono';
+  ctx.fillText(label, x+8, y+18);
+
+  ctx.fillStyle = '#667788';
+  ctx.font = '9px Share Tech Mono';
+  ctx.fillText(sub, x+8, y+30);
+}
+
+// ── Draw DW3000 module ────────────────────────────────────────
+function drawDW3000(m, highlighted=false) {
+  const {x,y,color,border,id,role} = m;
+  const w=120, h=80;
+  drawBox(x,y,w,h,`DW3000 ${id}`,role,color,border,highlighted);
+
+  // Antenna symbol
+  const ax = x+w-18, ay = y+20;
+  ctx.strokeStyle = highlighted?'#4af':'#8899aa';
+  ctx.lineWidth=1;
+  for (let i=0;i<3;i++) {
+    ctx.beginPath();
+    ctx.arc(ax,ay+10,(i+1)*7,Math.PI*1.1,Math.PI*1.9);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(ax,ay+10); ctx.lineTo(ax,ay+26);
+  ctx.stroke();
+
+  // Pin labels
+  ctx.fillStyle='#556677';
+  ctx.font='8px Share Tech Mono';
+  ctx.fillText('CLK',  x+6, y+45);
+  ctx.fillText('MOSI', x+6, y+55);
+  ctx.fillText('MISO', x+6, y+65);
+  ctx.fillText('CS',   x+6, y+75);
+  ctx.fillText('IRQ → ESP32', x+50, y+75);
+
+  // Decoupling cap indicator
+  ctx.fillStyle='#445566';
+  ctx.font='7px Share Tech Mono';
+  ctx.fillText('100nF ⏚', x+w-50, y+h-4);
+}
+
+// ── Draw ESP32 box ────────────────────────────────────────────
+function drawESP32(highlighted=false) {
+  const {x,y,w,h} = components.esp32;
+  drawBox(x,y,w,h,'ESP32-S3','JC3248W535C 3.5"',components.esp32.color,components.esp32.border,highlighted);
+
+  ctx.fillStyle='#334455';
+  ctx.font='8px Share Tech Mono';
+  const pins = [
+    '3.3V','GND','CLK','MOSI','MISO','',
+    'A0 CS','A1 CS','A2 CS','',
+    'IRQ Tx','IRQ Rx1','IRQ Rx2','IRQ Rx3','IRQ Rx4'
+  ];
+  pins.forEach((p,i) => {
+    if (!p) return;
+    ctx.fillStyle='#445566';
+    ctx.fillText('─', x+w-12, y+45+i*13);
+    ctx.fillStyle='#667788';
+    ctx.fillText(p, x+8, y+45+i*13);
+  });
+
+  // Screen representation
+  ctx.fillStyle='#001a0a';
+  ctx.strokeStyle='#1a4a2a';
+  ctx.lineWidth=1;
+  ctx.fillRect(x+8,y+h-55,w-16,40);
+  ctx.strokeRect(x+8,y+h-55,w-16,40);
+  ctx.fillStyle='#2a6a3a';
+  ctx.font='7px Share Tech Mono';
+  ctx.fillText('3.5" TOUCH', x+20, y+h-30);
+  ctx.fillText('DISPLAY', x+26, y+h-18);
+}
+
+// ── Draw 74HC138 ──────────────────────────────────────────────
+function drawMux(highlighted=false) {
+  const {x,y,w,h} = components.mux;
+  drawBox(x,y,w,h,'74HC138','3-to-8 CS Decoder',components.mux.color,components.mux.border,highlighted);
+
+  ctx.fillStyle='#556644';
+  ctx.font='8px Share Tech Mono';
+  ['A0','A1','A2'].forEach((p,i) => {
+    ctx.fillText(p, x+6, y+32+i*16);
+    ctx.fillText('─', x+w-12, y+32+i*16);
+  });
+  ['Y0','Y1','Y2','Y3','Y4'].forEach((p,i) => {
+    ctx.fillStyle='#556644';
+    ctx.fillText('─', x-8, y+22+i*16);
+    ctx.fillText(p, x+w-22, y+22+i*16);
+  });
+}
+
+// ── Draw power rail ───────────────────────────────────────────
+function drawPowerRail() {
+  // 3.3V rail — horizontal line at top
+  ctx.strokeStyle=COL.power;
+  ctx.lineWidth=2;
+  ctx.setLineDash([6,3]);
+  ctx.beginPath();
+  ctx.moveTo(180,130); ctx.lineTo(870,130);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=COL.power;
+  ctx.font='bold 9px Share Tech Mono';
+  ctx.fillText('3.3V RAIL', 185, 125);
+
+  // GND rail
+  ctx.strokeStyle=COL.gnd;
+  ctx.lineWidth=2;
+  ctx.setLineDash([6,3]);
+  ctx.beginPath();
+  ctx.moveTo(180,145); ctx.lineTo(870,145);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=COL.gnd;
+  ctx.fillText('GND RAIL', 185, 158);
+
+  // Drop lines to each DW3000
+  dw3000s.forEach(m => {
+    // Power
+    ctx.strokeStyle=COL.power; ctx.lineWidth=1.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(m.x+20,130); ctx.lineTo(m.x+20,m.y); ctx.stroke();
+    // GND
+    ctx.strokeStyle=COL.gnd;
+    ctx.beginPath(); ctx.moveTo(m.x+30,145); ctx.lineTo(m.x+30,m.y); ctx.stroke();
+  });
+
+  // Drop to mux
+  ctx.strokeStyle=COL.power; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(320,130); ctx.lineTo(320,220); ctx.stroke();
+  ctx.strokeStyle=COL.gnd;
+  ctx.beginPath(); ctx.moveTo(330,145); ctx.lineTo(330,320); ctx.stroke();
+}
+
+// ── Draw SPI bus ──────────────────────────────────────────────
+function drawSPIBus() {
+  const busX = 490;
+  // Vertical SPI bus lines
+  [[COL.clk,170],[COL.mosi,182],[COL.miso,194]].forEach(([col,y]) => {
+    ctx.strokeStyle=col; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(busX,y); ctx.lineTo(busX,560); ctx.stroke();
+    // Taps to each module
+    dw3000s.forEach(m => {
+      ctx.beginPath();
+      ctx.moveTo(busX,m.y+40+(y-170)/6);
+      ctx.lineTo(m.x,m.y+40+(y-170)/6);
+      ctx.stroke();
+    });
+    // From ESP32
+    ctx.beginPath();
+    const ey = y===170?210:y===182?230:250;
+    ctx.moveTo(180,ey); ctx.lineTo(busX,y); ctx.stroke();
+  });
+
+  // Bus labels
+  ctx.fillStyle=COL.clk;  ctx.font='8px Share Tech Mono'; ctx.fillText('CLK',  busX+2,168);
+  ctx.fillStyle=COL.mosi; ctx.fillText('MOSI', busX+2,180);
+  ctx.fillStyle=COL.miso; ctx.fillText('MISO', busX+2,192);
+}
+
+// ── Draw CS lines from 74HC138 ────────────────────────────────
+function drawCSLines() {
+  dw3000s.forEach((m,i) => {
+    const y1 = 232+i*16;
+    const y2 = m.y+72;
+    ctx.strokeStyle=COL.cs; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(400,y1);
+    ctx.lineTo(520,y1);
+    ctx.lineTo(520,y2);
+    ctx.lineTo(m.x,y2);
+    ctx.stroke();
+    ctx.fillStyle=COL.cs; ctx.font='7px Share Tech Mono';
+    ctx.fillText(`CS${i}`,406,y1-2);
+  });
+}
+
+// ── Draw IRQ lines ────────────────────────────────────────────
+function drawIRQLines() {
+  const irqX = 860;
+  dw3000s.forEach((m,i) => {
+    const espY = 340+i*16;
+    const modY = m.y+72;
+    ctx.strokeStyle=COL.irq; ctx.lineWidth=1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.moveTo(m.x+120,modY);
+    ctx.lineTo(irqX,modY);
+    ctx.lineTo(irqX,espY);
+    ctx.lineTo(180,espY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  ctx.fillStyle=COL.irq; ctx.font='7px Share Tech Mono';
+  ctx.fillText('IRQ', irqX+2, 340);
+}
+
+// ── Draw A0/A1/A2 lines to mux ────────────────────────────────
+function drawMuxControl() {
+  [[280,248],[296,264],[312,280]].forEach(([ey,my],i) => {
+    ctx.strokeStyle=COL.cs; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(180,ey);
+    ctx.lineTo(240,ey);
+    ctx.lineTo(240,my);
+    ctx.lineTo(280,my);
+    ctx.stroke();
+  });
+}
+
+// ── Highlight & info ──────────────────────────────────────────
+let highlighted = null;
+
+const infoTexts = {
+  esp32: `ESP32-S3 — Master Controller\n\nRuns the full pipeline: CIR capture → background subtraction\n→ multilateration → LovyanGFX display rendering.\n\nBuilt-in 3.5" touchscreen displays the tactical radar UI.`,
+  mux:   `74HC138 — SPI Chip Select Decoder\n\nJust 3 GPIO pins (A0/A1/A2) select any one of 8 CS outputs.\nOutputs are active LOW — matches DW3000 CS pin perfectly.\nCost: ~$1 AUD from AliExpress or Element14.`,
+  dw_Tx:  `DW3000 Tx — TRANSMITTER MODULE\n\nBlasts UWB pulses through the wall at 6.5GHz centre frequency.\nConfigured in continuous transmission mode.\nConnect Vivaldi antenna via SMA connector facing the wall.`,
+  dw_Rx1:`DW3000 Rx1 — LEFT RECEIVER\n\nCaptures reflections returning through the wall.\nReads raw CIR (Channel Impulse Response) data over SPI.\nSpaced 30-40cm left of Tx module.`,
+  dw_Rx2:`DW3000 Rx2 — RIGHT RECEIVER\n\nMirror of Rx1 on the right side.\nTime difference between Rx1 and Rx2 gives horizontal position.\nSpaced 30-40cm right of Tx module.`,
+  dw_Rx3:`DW3000 Rx3 — TOP RECEIVER\n\nCaptures vertical axis reflections.\nTime difference between Rx3 and Rx4 gives height of target.\nSpaced 20-25cm above Tx module.`,
+  dw_Rx4:`DW3000 Rx4 — BOTTOM RECEIVER\n\nMirror of Rx3 below the Tx module.\nCombined with Rx3 gives full X/Y/Z target coordinates.\nSpaced 20-25cm below Tx module.`,
+};
+
+function drawAll(hl=null) {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=COL.bg;
+  ctx.fillRect(0,0,W,H);
+
+  // Subtle grid
+  ctx.strokeStyle='rgba(30,50,80,0.15)';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  drawPowerRail();
+  drawSPIBus();
+  drawMuxControl();
+  drawCSLines();
+  drawIRQLines();
+
+  drawESP32(hl==='esp32');
+  drawMux(hl==='mux');
+  dw3000s.forEach(m => drawDW3000(m, hl===`dw_${m.id}`));
+
+  // Section labels
+  ctx.fillStyle='rgba(60,120,180,0.3)';
+  ctx.font='9px Share Tech Mono';
+  ctx.fillText('① CONTROLLER', 22, 155);
+  ctx.fillText('② CS DECODER', 282, 217);
+  ctx.fillText('③ UWB ARRAY', 532, 32);
+}
+
+// ── Hit testing ───────────────────────────────────────────────
+function getHit(mx,my) {
+  const {x,y,w,h}=components.esp32;
+  if(mx>=x&&mx<=x+w&&my>=y&&my<=y+h) return 'esp32';
+  const m2=components.mux;
+  if(mx>=m2.x&&mx<=m2.x+m2.w&&my>=m2.y&&my<=m2.y+m2.h) return 'mux';
+  for(const m of dw3000s) {
+    if(mx>=m.x&&mx<=m.x+120&&my>=m.y&&my<=m.y+80) return `dw_${m.id}`;
+  }
+  return null;
+}
+
+canvas.addEventListener('mousemove', e => {
+  const r=canvas.getBoundingClientRect();
+  const sx=W/r.width, sy=H/r.height;
+  const mx=(e.clientX-r.left)*sx, my=(e.clientY-r.top)*sy;
+  const hit=getHit(mx,my);
+  if(hit!==highlighted){ highlighted=hit; drawAll(hit); updateInfo(hit); }
+});
+
+canvas.addEventListener('click', e => {
+  const r=canvas.getBoundingClientRect();
+  const sx=W/r.width, sy=H/r.height;
+  const mx=(e.clientX-r.left)*sx, my=(e.clientY-r.top)*sy;
+  updateInfo(getHit(mx,my));
+});
+
+function updateInfo(key) {
+  const el=document.getElementById('info');
+  if(!key||!infoTexts[key]){
+    el.innerHTML='<h3>CLICK ANY COMPONENT FOR DETAILS</h3>Hover or tap a component to see wiring notes.';
+    return;
+  }
+  const lines=infoTexts[key].split('\n');
+  el.innerHTML=`<h3>${lines[0]}</h3>${lines.slice(1).join('<br>')}`;
+}
+
+drawAll();
+</script>
+</body>
+</html>

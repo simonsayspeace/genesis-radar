@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UWB Tactical Radar</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Share Tech Mono', monospace;
+    overflow: hidden;
+  }
+  #title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: #4af;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  #display {
+    position: relative;
+    width: 480px;
+    height: 340px;
+    background: #000308;
+    border: 1px solid #1a3a5a;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  canvas { display: block; }
+  #statusbar {
+    display: flex;
+    justify-content: space-between;
+    width: 480px;
+    margin-top: 5px;
+    font-size: 9px;
+    color: #2a6a8a;
+    letter-spacing: 1px;
+    padding: 0 4px;
+  }
+  .stat-active { color: #4af; }
+  .stat-warn { color: #fa4; }
+  .stat-alert { color: #f44; }
+</style>
+</head>
+<body>
+<div id="title">◈ UWB THROUGH-WALL TACTICAL RADAR ◈</div>
+<div id="display">
+  <canvas id="main" width="480" height="340"></canvas>
+</div>
+<div id="statusbar">
+  <span>TX: <span class="stat-active">LIVE</span></span>
+  <span>RX: <span class="stat-active">4/4</span></span>
+  <span>BG: <span class="stat-active">CALIBRATED</span></span>
+  <span>MODE: <span class="stat-active">PENETRATE</span></span>
+  <span>FREQ: <span class="stat-active">6.5GHz</span></span>
+  <span>TARGETS: <span id="tcount" class="stat-warn">0</span></span>
+</div>
+
+<script>
+const canvas = document.getElementById('main');
+const ctx = canvas.getContext('2d');
+const W = 480, H = 340;
+
+// ── Layout zones ──────────────────────────────────────────────
+// Left: forward X-ray view  340x340 (0,0)
+// Right top: half-circle radar  140x180 (340,0)
+// Right mid: compass           140x80  (340,180)
+// Right bot: top-down plan     140x80  (340,260)
+
+const FW = 310, FH = 340;   // forward view
+const RX = 312, RW = 168;   // right panel x and width
+const RADAR_CY = 158;       // half-circle radar centre Y
+const RADAR_R  = 130;       // radar radius
+
+// ── Colour by range ──────────────────────────────────────────
+function targetColor(dist, alpha) {
+  // dist 0-3m = red, 3-6m = yellow, 6-10m = green
+  let r, g, b;
+  if (dist < 3) { r=255; g=60;  b=30; }
+  else if (dist < 6) { r=255; g=200; b=0; }
+  else { r=60; g=255; b=80; }
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function targetColorSolid(dist) {
+  if (dist < 3) return '#ff3c1e';
+  if (dist < 6) return '#ffc800';
+  return '#3cff50';
+}
+
+// ── Targets ───────────────────────────────────────────────────
+class Target {
+  constructor(id, x, y, z) {
+    this.id = id;
+    // x = left/right (-4 to 4m), y = depth (0.5 to 10m), z = height (0=floor,2=head)
+    this.x = x; this.y = y; this.z = z;
+    this.vx = (Math.random()-0.5)*0.006;
+    this.vy = (Math.random()-0.5)*0.004;
+    this.vz = (Math.random()-0.5)*0.002;
+    this.trail = [];
+    this.pulse = Math.random()*Math.PI*2;
+    this.breathe = Math.random()*Math.PI*2;
+  }
+  get dist() { return Math.sqrt(this.x*this.x + this.y*this.y); }
+  update() {
+    this.x += this.vx; this.y += this.vy; this.z += this.vz;
+    if (this.x < -4 || this.x > 4)   this.vx *= -1;
+    if (this.y < 0.8 || this.y > 9.5) this.vy *= -1;
+    if (this.z < 0.1 || this.z > 1.9) this.vz *= -1;
+    if (Math.random()<0.008) this.vx = (Math.random()-0.5)*0.009;
+    if (Math.random()<0.008) this.vy = (Math.random()-0.5)*0.006;
+    this.trail.push({x:this.x, y:this.y});
+    if (this.trail.length > 35) this.trail.shift();
+    this.pulse  = (this.pulse  + 0.06) % (Math.PI*2);
+    this.breathe= (this.breathe+ 0.03) % (Math.PI*2);
+  }
+}
+
+const targets = [
+  new Target(1,  1.5, 2.5, 1.7),
+  new Target(2, -2.0, 6.0, 1.6),
+  new Target(3,  0.5, 8.5, 1.5),
+];
+
+let frame = 0;
+let sweepAngle = Math.PI; // radar sweep starts at 180deg
+
+// ── Draw forward X-ray view ───────────────────────────────────
+function drawForwardView() {
+  // Background — dark blue-grey like backscatter
+  const bg = ctx.createLinearGradient(0,0,0,FH);
+  bg.addColorStop(0, '#000810');
+  bg.addColorStop(1, '#000510');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,FW,FH);
+
+  // Subtle horizontal scan lines for X-ray feel
+  ctx.strokeStyle = 'rgba(30,80,120,0.08)';
+  ctx.lineWidth = 1;
+  for (let y=0; y<FH; y+=3) {
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(FW,y); ctx.stroke();
+  }
+
+  // Wall plane — ghostly vertical band
+  const wallX = FW * 0.5;
+  const wallGrd = ctx.createLinearGradient(wallX-18,0,wallX+18,0);
+  wallGrd.addColorStop(0,'rgba(40,120,200,0)');
+  wallGrd.addColorStop(0.5,'rgba(40,120,200,0.12)');
+  wallGrd.addColorStop(1,'rgba(40,120,200,0)');
+  ctx.fillStyle = wallGrd;
+  ctx.fillRect(0,0,FW,FH);
+
+  // Floor line
+  const floorY = FH * 0.88;
+  ctx.strokeStyle = 'rgba(60,140,200,0.25)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(0,floorY); ctx.lineTo(FW,floorY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(60,140,200,0.3)';
+  ctx.font = '8px Share Tech Mono';
+  ctx.fillText('FLOOR', 4, floorY-3);
+
+  // Vertical centre reference
+  ctx.strokeStyle = 'rgba(60,140,200,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(FW/2,0); ctx.lineTo(FW/2,FH); ctx.stroke();
+
+  // Draw targets as glowing human blobs
+  targets.forEach(t => {
+    const dist = t.dist;
+    // Map x to screen: -4m=20px, 4m=FW-20px
+    const sx = (t.x / 4) * (FW/2 - 20) + FW/2;
+    // Map z (height 0-2m) to screen: 0=floorY, 2=topY
+    const topY = FH * 0.08;
+    const sz = floorY - (t.z / 2.0) * (floorY - topY);
+    // Size inversely proportional to distance
+    const blobH = Math.max(20, 80 - dist * 6);
+    const blobW = blobH * 0.38;
+    const breathScale = 1 + 0.03 * Math.sin(t.breathe);
+
+    // Trail in forward view (faint horizontal smear)
+    if (t.trail.length > 2) {
+      for (let i=1; i<t.trail.length; i++) {
+        const ta = t.trail[i-1], tb = t.trail[i];
+        const alpha = (i/t.trail.length) * 0.3;
+        const tax = (ta.x/4)*(FW/2-20)+FW/2;
+        const tbx = (tb.x/4)*(FW/2-20)+FW/2;
+        ctx.beginPath();
+        ctx.moveTo(tax, sz); ctx.lineTo(tbx, sz);
+        ctx.strokeStyle = targetColor(dist, alpha);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    // Outer glow aura
+    const auraH = blobH * 1.6 * breathScale;
+    const auraW = blobW * 2.2 * breathScale;
+    const auraGrd = ctx.createRadialGradient(sx, sz-blobH*0.3, 0, sx, sz-blobH*0.3, auraH*0.7);
+    auraGrd.addColorStop(0, targetColor(dist, 0.18));
+    auraGrd.addColorStop(1, targetColor(dist, 0));
+    ctx.beginPath();
+    ctx.ellipse(sx, sz-blobH*0.3, auraW, auraH*0.7, 0, 0, Math.PI*2);
+    ctx.fillStyle = auraGrd;
+    ctx.fill();
+
+    // Human silhouette blob — head
+    const headR = blobW * 0.85 * breathScale;
+    const headY = sz - blobH * 0.88;
+    const headGrd = ctx.createRadialGradient(sx, headY, 0, sx, headY, headR*1.4);
+    headGrd.addColorStop(0, targetColor(dist, 0.9));
+    headGrd.addColorStop(0.6, targetColor(dist, 0.5));
+    headGrd.addColorStop(1, targetColor(dist, 0));
+    ctx.beginPath();
+    ctx.arc(sx, headY, headR, 0, Math.PI*2);
+    ctx.fillStyle = headGrd;
+    ctx.fill();
+
+    // Torso blob
+    const torsoGrd = ctx.createRadialGradient(sx, sz-blobH*0.45, 0, sx, sz-blobH*0.45, blobW*1.3);
+    torsoGrd.addColorStop(0, targetColor(dist, 0.85));
+    torsoGrd.addColorStop(0.5, targetColor(dist, 0.45));
+    torsoGrd.addColorStop(1, targetColor(dist, 0));
+    ctx.beginPath();
+    ctx.ellipse(sx, sz-blobH*0.45, blobW*1.2*breathScale, blobH*0.38, 0, 0, Math.PI*2);
+    ctx.fillStyle = torsoGrd;
+    ctx.fill();
+
+    // Legs blob
+    const legsGrd = ctx.createRadialGradient(sx, sz-blobH*0.12, 0, sx, sz-blobH*0.12, blobW);
+    legsGrd.addColorStop(0, targetColor(dist, 0.7));
+    legsGrd.addColorStop(1, targetColor(dist, 0));
+    ctx.beginPath();
+    ctx.ellipse(sx, sz-blobH*0.12, blobW*0.85, blobH*0.28, 0, 0, Math.PI*2);
+    ctx.fillStyle = legsGrd;
+    ctx.fill();
+
+    // Core bright centre dot
+    ctx.beginPath();
+    ctx.arc(sx, sz-blobH*0.5, 3, 0, Math.PI*2);
+    ctx.fillStyle = targetColorSolid(dist);
+    ctx.fill();
+
+    // Data tag
+    ctx.fillStyle = targetColor(dist, 0.9);
+    ctx.font = '8px Share Tech Mono';
+    ctx.fillText(`T${t.id}`, sx+blobW+3, headY-2);
+    ctx.fillText(`${dist.toFixed(1)}m`, sx+blobW+3, headY+8);
+  });
+
+  // Corner brackets
+  const m=8, l=16;
+  ctx.strokeStyle = 'rgba(60,160,255,0.5)';
+  ctx.lineWidth = 1.5;
+  [[m,m],[FW-m,m],[m,FH-m],[FW-m,FH-m]].forEach(([cx,cy],i) => {
+    ctx.beginPath();
+    const sx2 = i%2===0?1:-1, sy2 = i<2?1:-1;
+    ctx.moveTo(cx, cy+sy2*l); ctx.lineTo(cx,cy); ctx.lineTo(cx+sx2*l,cy);
+    ctx.stroke();
+  });
+
+  // Label
+  ctx.fillStyle = 'rgba(60,160,255,0.5)';
+  ctx.font = '8px Share Tech Mono';
+  ctx.fillText('FORWARD VIEW — THROUGH WALL', 10, 12);
+
+  // Legend
+  const lx = 8, ly = FH - 42;
+  ctx.font = '8px Share Tech Mono';
+  [[`< 3m`,'#ff3c1e'],[`3-6m`,'#ffc800'],[`> 6m`,'#3cff50']].forEach(([label,col],i) => {
+    ctx.beginPath(); ctx.arc(lx+6, ly+i*12, 4, 0, Math.PI*2);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.fillStyle = 'rgba(140,200,255,0.7)';
+    ctx.fillText(label, lx+14, ly+i*12+3);
+  });
+
+  // Divider
+  ctx.strokeStyle = '#1a3a5a';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(FW+1,0); ctx.lineTo(FW+1,FH); ctx.stroke();
+}
+
+// ── Draw half-circle radar ────────────────────────────────────
+function drawHalfRadar() {
+  const cx = RX + RW/2;
+  const cy = RADAR_CY;
+  const r  = 78;
+
+  // Background
+  ctx.fillStyle = '#000a04';
+  ctx.fillRect(RX, 0, RW, RADAR_CY+10);
+
+  // Label
+  ctx.fillStyle = 'rgba(0,255,100,0.5)';
+  ctx.font = '8px Share Tech Mono';
+  ctx.fillText('RADAR SWEEP', RX+18, 10);
+
+  // Range rings (half)
+  [0.33,0.66,1.0].forEach((frac,i) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r*frac, Math.PI, 2*Math.PI);
+    ctx.strokeStyle = `rgba(0,200,80,${0.1+i*0.06})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Range label
+    ctx.fillStyle = 'rgba(0,200,80,0.35)';
+    ctx.font = '7px Share Tech Mono';
+    ctx.fillText(`${(3.3*(i+1)).toFixed(0)}m`, cx + r*frac + 2, cy-2);
+  });
+
+  // Spoke lines
+  for (let a=0; a<=180; a+=30) {
+    const rad = (a * Math.PI)/180;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + r*Math.cos(Math.PI-rad), cy - r*Math.sin(Math.PI-rad));
+    ctx.strokeStyle = 'rgba(0,200,80,0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Sweep trail
+  for (let i=0; i<30; i++) {
+    const trailAngle = sweepAngle - (i * 0.04);
+    const alpha = (1 - i/30) * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, trailAngle, trailAngle+0.06);
+    ctx.lineTo(cx, cy);
+    ctx.fillStyle = `rgba(0,255,80,${alpha})`;
+    ctx.fill();
+  }
+
+  // Sweep line
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + r*Math.cos(sweepAngle), cy + r*Math.sin(sweepAngle));
+  ctx.strokeStyle = 'rgba(0,255,80,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Base line
+  ctx.beginPath();
+  ctx.moveTo(cx-r, cy); ctx.lineTo(cx+r, cy);
+  ctx.strokeStyle = 'rgba(0,200,80,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Sensor dot
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+
+  // Targets on radar
+  targets.forEach(t => {
+    const dist = t.dist;
+    const angle = Math.atan2(-t.x, t.y); // angle from forward
+    const radarAngle = Math.PI - angle; // map to half circle
+    const radarR = Math.min(dist / 10, 1) * r;
+    const tx2 = cx + radarR * Math.cos(radarAngle);
+    const ty2 = cy + radarR * Math.sin(radarAngle);
+
+    // Blip glow
+    const grd = ctx.createRadialGradient(tx2,ty2,0,tx2,ty2,8);
+    grd.addColorStop(0, targetColor(dist, 0.9));
+    grd.addColorStop(1, targetColor(dist, 0));
+    ctx.beginPath(); ctx.arc(tx2,ty2,8,0,Math.PI*2);
+    ctx.fillStyle = grd; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(tx2,ty2,3,0,Math.PI*2);
+    ctx.fillStyle = targetColorSolid(dist); ctx.fill();
+  });
+
+  // Half circle border
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI, 2*Math.PI);
+  ctx.strokeStyle = 'rgba(0,200,80,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+// ── Draw compass ──────────────────────────────────────────────
+function drawCompass() {
+  const cx = RX + RW/2;
+  const cy = RADAR_CY + 18 + 36;
+  const r  = 28;
+  const t2 = RADAR_CY + 12;
+
+  ctx.fillStyle = '#00050a';
+  ctx.fillRect(RX, t2, RW, 88);
+  ctx.strokeStyle = '#1a3a5a';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(RX,t2); ctx.lineTo(RX+RW,t2); ctx.stroke();
+
+  ctx.fillStyle = 'rgba(60,160,255,0.4)';
+  ctx.font = '8px Share Tech Mono';
+  ctx.fillText('COMPASS', RX+38, t2+10);
+
+  // Ring
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle = 'rgba(60,160,255,0.25)'; ctx.lineWidth=1; ctx.stroke();
+
+  // Cardinal points
+  [['N',0],['E',90],['S',180],['W',270]].forEach(([label,deg]) => {
+    const rad = (deg-90)*Math.PI/180;
+    const lx2 = cx + (r+10)*Math.cos(rad);
+    const ly2 = cy + (r+10)*Math.sin(rad);
+    ctx.fillStyle = label==='N' ? '#ff4444' : 'rgba(60,160,255,0.6)';
+    ctx.font = label==='N' ? 'bold 9px Share Tech Mono' : '8px Share Tech Mono';
+    ctx.fillText(label, lx2-3, ly2+3);
+  });
+
+  // Tick marks
+  for (let d=0; d<360; d+=45) {
+    const rad=(d-90)*Math.PI/180;
+    ctx.beginPath();
+    ctx.moveTo(cx+(r-4)*Math.cos(rad), cy+(r-4)*Math.sin(rad));
+    ctx.lineTo(cx+r*Math.cos(rad), cy+r*Math.sin(rad));
+    ctx.strokeStyle='rgba(60,160,255,0.4)'; ctx.lineWidth=1; ctx.stroke();
+  }
+
+  // Needle (fixed north for now — would use magnetometer)
+  const needleAngle = -Math.PI/2;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+r*0.7*Math.cos(needleAngle), cy+r*0.7*Math.sin(needleAngle));
+  ctx.strokeStyle='#ff4444'; ctx.lineWidth=2; ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx,cy);
+  ctx.lineTo(cx+r*0.5*Math.cos(needleAngle+Math.PI), cy+r*0.5*Math.sin(needleAngle+Math.PI));
+  ctx.strokeStyle='rgba(60,160,255,0.6)'; ctx.lineWidth=2; ctx.stroke();
+
+  ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.fill();
+
+  ctx.fillStyle='rgba(60,160,255,0.5)';
+  ctx.font='8px Share Tech Mono';
+  ctx.fillText('000°', cx-10, t2+82);
+}
+
+// ── Draw top-down plan view ───────────────────────────────────
+function drawTopView() {
+  const t2 = RADAR_CY + 100;
+  const ph = H - t2;
+  const pcx = RX + RW/2;
+  const pcy = t2 + ph/2;
+  const scaleM = (ph*0.42) / 10;
+
+  ctx.fillStyle = '#000308';
+  ctx.fillRect(RX, t2, RW, ph);
+  ctx.strokeStyle='#1a3a5a'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(RX,t2); ctx.lineTo(RX+RW,t2); ctx.stroke();
+
+  ctx.fillStyle='rgba(60,160,255,0.4)';
+  ctx.font='8px Share Tech Mono';
+  ctx.fillText('TOP VIEW', RX+40, t2+10);
+
+  // Grid
+  ctx.strokeStyle='rgba(30,80,120,0.2)'; ctx.lineWidth=1;
+  for (let i=-2;i<=2;i++) {
+    ctx.beginPath(); ctx.moveTo(pcx+i*scaleM*2,t2+2); ctx.lineTo(pcx+i*scaleM*2,t2+ph-2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(RX+2,pcy+i*scaleM*2); ctx.lineTo(RX+RW-2,pcy+i*scaleM*2); ctx.stroke();
+  }
+
+  // Wall line
+  ctx.setLineDash([4,3]);
+  ctx.strokeStyle='rgba(100,180,255,0.3)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(RX+4,pcy-scaleM*1.5); ctx.lineTo(RX+RW-4,pcy-scaleM*1.5); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(100,180,255,0.3)'; ctx.font='7px Share Tech Mono';
+  ctx.fillText('WALL',RX+RW/2-8,pcy-scaleM*1.5-2);
+
+  // Sensor
+  ctx.beginPath(); ctx.arc(pcx,pcy,4,0,Math.PI*2);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='7px Share Tech Mono';
+  ctx.fillText('YOU',pcx-8,pcy+12);
+
+  // Targets
+  targets.forEach(t => {
+    const dist = t.dist;
+    const tx2 = pcx + t.x * scaleM;
+    const ty2 = pcy - t.y * scaleM;
+    if (ty2 < t2+4 || ty2 > t2+ph-4) return;
+
+    const grd = ctx.createRadialGradient(tx2,ty2,0,tx2,ty2,7);
+    grd.addColorStop(0,targetColor(dist,0.9));
+    grd.addColorStop(1,targetColor(dist,0));
+    ctx.beginPath(); ctx.arc(tx2,ty2,7,0,Math.PI*2);
+    ctx.fillStyle=grd; ctx.fill();
+    ctx.beginPath(); ctx.arc(tx2,ty2,3,0,Math.PI*2);
+    ctx.fillStyle=targetColorSolid(dist); ctx.fill();
+
+    // Trail
+    if (t.trail.length>2) {
+      for (let i=1;i<t.trail.length;i++) {
+        const ta=t.trail[i-1], tb=t.trail[i];
+        const alpha=(i/t.trail.length)*0.4;
+        ctx.beginPath();
+        ctx.moveTo(pcx+ta.x*scaleM, pcy-ta.y*scaleM);
+        ctx.lineTo(pcx+tb.x*scaleM, pcy-tb.y*scaleM);
+        ctx.strokeStyle=targetColor(dist,alpha);
+        ctx.lineWidth=1.5; ctx.stroke();
+      }
+    }
+  });
+}
+
+// ── Main loop ─────────────────────────────────────────────────
+function loop() {
+  frame++;
+  ctx.clearRect(0,0,W,H);
+
+  // Advance radar sweep (half circle = PI to 2PI)
+  sweepAngle -= 0.025;
+  if (sweepAngle < Math.PI) sweepAngle = 2*Math.PI;
+
+  targets.forEach(t => t.update());
+
+  drawForwardView();
+  drawHalfRadar();
+  drawCompass();
+  drawTopView();
+
+  // Target count
+  document.getElementById('tcount').textContent = targets.length;
+
+  // Timestamp
+  ctx.fillStyle='rgba(60,120,180,0.4)';
+  ctx.font='8px Share Tech Mono';
+  const now=new Date();
+  ctx.fillText(now.toTimeString().slice(0,8), W-58, H-4);
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
